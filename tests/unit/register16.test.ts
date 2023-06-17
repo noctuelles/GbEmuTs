@@ -15,10 +15,8 @@ describe('Register16', () => {
     test('writeLow()', () => {
         expect(new Register16().writeLow(0xFF)).toBe(0xFF)
         expect(new Register16().writeLow(0xFC)).toBe(0xFC)
-
         expect(new Register16(0xFF00).writeLow(0xFC)).toBe(0xFFFC)
         expect(new Register16(0xFFAA).writeLow(0xFC)).toBe(0xFFFC)
-
         expect(new Register16(0xABCD).writeLow(0xCF)).toBe(0xABCF)
 
         for (let a = 0x00; a <= 0xFF; a++) {
@@ -28,5 +26,13 @@ describe('Register16', () => {
     test('writeHigh()', () => {
         expect(new Register16().writeHigh(0xFF)).toBe(0xFF00)
         expect(new Register16(0x00FF).writeHigh(0xAB)).toBe(0xABFF)
+        expect(new Register16(0xFF00).writeHigh(0xFC)).toBe(0xFC00)
+        expect(new Register16(0x00AA).writeHigh(0xFC)).toBe(0xFCAA)
+        expect(new Register16(0xABCD).writeHigh(0xCF)).toBe(0xCFCD)
+
+
+        for (let a = 0x00; a <= 0xFF; a++) {
+            expect(new Register16(0xABFF).writeHigh(a)).toBe(0x00FF + (a << 8))
+        }
     });
 });
