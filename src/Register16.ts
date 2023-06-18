@@ -1,29 +1,25 @@
 import { Uint16, Uint8 } from "./Types";
 
 export default class Register16 {
-    constructor(private value: Uint16 = 0) {}
+    constructor(public value: Uint16 = 0 | 0) {}
 
-    public readLow(): Uint8 {
-        return this.value & 0xFF
+    public get low(): Uint8 {
+        return this.value & 0xff;
     }
 
-    public readHigh(): Uint8 {
-        return this.value & (0xFF << 8)
+    public get high(): Uint8 {
+        return this.value & (0xff << 8);
     }
 
-    public writeLow(value: Uint8): Uint16 {
-        return this.value = this.readHigh() | value
+    public set low(value: Uint8) {
+        this.value = this.high | value;
     }
 
-    public writeHigh(value: Uint8): Uint16 {
-        return this.value = this.readLow() | value << 8
+    public set high(value: Uint8) {
+        this.value = this.low | (value << 8);
     }
 
-    public read(): Uint16 {
-        return this.value
-    }
-
-    public write(value: Uint16): Uint16 {
-        return this.value = value
+    public toString() {
+        return "0x" + this.value.toString(16).padStart(4, "0");
     }
 }

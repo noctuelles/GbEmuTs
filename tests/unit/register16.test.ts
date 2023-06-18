@@ -1,38 +1,31 @@
-import {describe, expect, test} from '@jest/globals';
-import Register16 from '../../src/Register16';
+import { describe, expect, test } from "@jest/globals";
+import Register16 from "../../src/Register16";
 
-describe('Register16', () => {
-    test('readLow()', () => {
-        expect(new Register16(0xFF).readLow()).toBe(0xFF)
-        expect(new Register16(0x12).readLow()).toBe(0x12)
-    });
-    test('readHigh()', () => {
-        expect(new Register16(0xFF).readHigh()).toBe(0x00)
-        expect(new Register16(0xFF00).readHigh()).toBe(0xFF00)
-        expect(new Register16(0xFF12).readHigh()).toBe(0xFF00)
-        expect(new Register16(0xFC12).readHigh()).toBe(0xFC00)
-    });
-    test('writeLow()', () => {
-        expect(new Register16().writeLow(0xFF)).toBe(0xFF)
-        expect(new Register16().writeLow(0xFC)).toBe(0xFC)
-        expect(new Register16(0xFF00).writeLow(0xFC)).toBe(0xFFFC)
-        expect(new Register16(0xFFAA).writeLow(0xFC)).toBe(0xFFFC)
-        expect(new Register16(0xABCD).writeLow(0xCF)).toBe(0xABCF)
+describe("Register16", () => {
+  test("get low", () => {
+    expect(new Register16(0xff).low).toBe(0xff);
+    expect(new Register16(0x12).low).toBe(0x12);
+  });
+  test("get high", () => {
+    expect(new Register16(0xff).high).toBe(0x00);
+    expect(new Register16(0xff00).high).toBe(0xff00);
+    expect(new Register16(0xff12).high).toBe(0xff00);
+    expect(new Register16(0xfc12).high).toBe(0xfc00);
+  });
+  test("set low simple", () => {
+    const reg = new Register16();
 
-        for (let a = 0x00; a <= 0xFF; a++) {
-            expect(new Register16(0xDCFF).writeLow(a)).toBe(0xDC00 + a)
-        }
-    });
-    test('writeHigh()', () => {
-        expect(new Register16().writeHigh(0xFF)).toBe(0xFF00)
-        expect(new Register16(0x00FF).writeHigh(0xAB)).toBe(0xABFF)
-        expect(new Register16(0xFF00).writeHigh(0xFC)).toBe(0xFC00)
-        expect(new Register16(0x00AA).writeHigh(0xFC)).toBe(0xFCAA)
-        expect(new Register16(0xABCD).writeHigh(0xCF)).toBe(0xCFCD)
+    reg.low = 0xff;
+    expect(reg.low).toBe(0xff);
+    reg.low = 0xfc;
+    expect(reg.low).toBe(0xfc);
 
+    reg.value = 0xff00;
+    reg.low = 0xfc;
+    expect(reg.value).toBe(0xfffc);
 
-        for (let a = 0x00; a <= 0xFF; a++) {
-            expect(new Register16(0xABFF).writeHigh(a)).toBe(0x00FF + (a << 8))
-        }
-    });
+    reg.value = 0x00ff;
+    reg.low = 0xfc;
+    expect(reg.value).toBe(0x00fc);
+  });
 });
