@@ -51,3 +51,5 @@ const options = commandLineArgs(optionsDefinitions);
 
 const romContent = fs.readFileSync(options.rom, null);
 const cartridge = new Cartridge(romContent);
+
+console.log(cartridge.metadata.toString());

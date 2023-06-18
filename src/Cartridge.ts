@@ -1,11 +1,25 @@
+import { start } from "repl";
 import { Uint8 } from "./Types";
 
-const bufferRange = (start: number, end: number): [number, number] => [start, end + 1];
+const Range = (addressStart: number, addressEnd: number, offset: number = 0): [number, number] => [
+    addressStart + offset,
+    addressEnd + offset + 1,
+];
+
+function MapHeaderRange(addressStart: number, addressEnd: number) {
+    return Range(addressStart, addressEnd, -Cartridge.HEADER_LOCATION[0]);
+}
+
+function MapHeader(address: number) {
+    return address - Cartridge.HEADER_LOCATION[0];
+}
 
 enum CartridgeMetadataType {
     CARTRIDGE_TYPE,
     NEW_LICENSEE_CODE,
     OLD_LICENSEE_CODE,
+    CGB_FLAG,
+    DESTINATION_CODE,
 }
 
 class CartridgeMetadataValue {
@@ -260,6 +274,16 @@ class CartridgeMetadataValue {
         0xff: "LJN",
     };
 
+    private static readonly CGB_FLAG: Record<number, string> = {
+        0x80: "The game supports CGB enhancements, but is backwards compatible with monochrome Game Boys",
+        0xc0: "The game works on CGB only",
+    };
+
+    private static readonly DESTINATION_CODE: Record<number, string> = {
+        0x00: "Japan (and possibly overseas)",
+        0x01: "Overseas only",
+    };
+
     private static readonly UNKNOWN = "UNKNOWN";
 
     constructor(value: Uint8 | string, type: CartridgeMetadataType) {
@@ -270,10 +294,13 @@ class CartridgeMetadataValue {
                 CartridgeMetadataValue.OLD_LICENSEE_CODE[value as Uint8],
             [CartridgeMetadataType.NEW_LICENSEE_CODE]:
                 CartridgeMetadataValue.NEW_LICENSEE_CODE[value as string],
+            [CartridgeMetadataType.CGB_FLAG]: CartridgeMetadataValue.CGB_FLAG[value as Uint8],
+            [CartridgeMetadataType.DESTINATION_CODE]:
+                CartridgeMetadataValue.DESTINATION_CODE[value as Uint8],
         };
 
         this.value = value;
-        this.mapped = mappedType[type] ?? `UNKOWN (${value})`;
+        this.mapped = mappedType[type] ? `${mappedType[type]} (${value})` : `UNKOWN (${value})`;
     }
 
     public toString() {
@@ -286,10 +313,14 @@ class CartridgeMetadataValue {
 }
 
 export default class Cartridge {
+    public static readonly HEADER_LOCATION = Range(0x0100, 0x014f);
+
     private _metadata: CartridgeMetadata;
 
-    constructor(private readonly romContent: Buffer) {
-        this._metadata = new CartridgeMetadata(romContent);
+    constructor(private readonly cartridgeRomContent: Buffer) {
+        this._metadata = new CartridgeMetadata(
+            cartridgeRomContent.subarray(...Cartridge.HEADER_LOCATION),
+        );
     }
 
     public get metadata(): CartridgeMetadata {
@@ -299,36 +330,33 @@ export default class Cartridge {
 
 class CartridgeMetadata {
     private static readonly LOCATIONS = {
-        ENTRY_POINT: bufferRange(0x0100, 0x0103),
-        NINTENDO_LOGO: bufferRange(0x0104, 0x0133),
-        TITLE: bufferRange(0x0134, 0x0143),
-        MANUFACTURER_CODE: bufferRange(0x013f, 0x0142),
-        CGB_FLAG: 0x0143,
-        NEW_LICENSEE_CODE: bufferRange(0x0144, 0x0145),
-        ROM_SIZE: 0x148,
-        RAM_SIZE: 0x149,
-        CARTRIDGE_TYPE: 0x0147,
-        DESTINATION_CODE: 0x014a,
-        OLD_LICENSEE_CODE: 0x014b,
-        MASK_ROM_VERSION_NUMBER: 0x014c,
-        HEADER_CHECKSUM: 0x014d,
-        GLOBAL_CHECKSUM: bufferRange(0x014e, 0x014f),
+        ENTRY_POINT: MapHeaderRange(0x0100, 0x0103),
+        NINTENDO_LOGO: MapHeaderRange(0x0104, 0x0133),
+        TITLE: MapHeaderRange(0x0134, 0x0143),
+        MANUFACTURER_CODE: MapHeaderRange(0x013f, 0x0142),
+        CGB_FLAG: MapHeader(0x0143),
+        NEW_LICENSEE_CODE: MapHeaderRange(0x0144, 0x0145),
+        SGB_FLAG: MapHeader(0x0146),
+        ROM_SIZE: MapHeader(0x148),
+        RAM_SIZE: MapHeader(0x149),
+        CARTRIDGE_TYPE: MapHeader(0x0147),
+        DESTINATION_CODE: MapHeader(0x014a),
+        OLD_LICENSEE_CODE: MapHeader(0x014b),
+        MASK_ROM_VERSION_NUMBER: MapHeader(0x014c),
+        HEADER_CHECKSUM: MapHeader(0x014d),
+        GLOBAL_CHECKSUM: MapHeaderRange(0x014e, 0x014f),
     };
 
     private static readonly SEE_NEW_LICENSEE_CODE = 0x33;
 
-    constructor(private readonly cartridgeContent: Buffer) {
-        if (this.cartridgeContent.length < 0x150) {
-            throw new Error("Invalid cartridge size");
-        }
-    }
+    constructor(private readonly cartridgeHeaderContent: Buffer) {}
 
     private returnByteAtLocation(location: number) {
-        return this.cartridgeContent.readUint8(location);
+        return this.cartridgeHeaderContent.readUint8(location);
     }
 
     private subarrayAt(range: [number, number]) {
-        return this.cartridgeContent.subarray(...range);
+        return this.cartridgeHeaderContent.subarray(...range);
     }
 
     public get entryPoint() {
@@ -340,7 +368,21 @@ class CartridgeMetadata {
     }
 
     public get cartridgeType() {
-        return this.returnByteAtLocation(CartridgeMetadata.LOCATIONS.CARTRIDGE_TYPE);
+        return new CartridgeMetadataValue(
+            this.returnByteAtLocation(CartridgeMetadata.LOCATIONS.CARTRIDGE_TYPE),
+            CartridgeMetadataType.CARTRIDGE_TYPE,
+        );
+    }
+
+    public get manufacturerCode() {
+        return this.subarrayAt(CartridgeMetadata.LOCATIONS.MANUFACTURER_CODE).toString("ascii");
+    }
+
+    public get cgbFlag() {
+        return new CartridgeMetadataValue(
+            this.returnByteAtLocation(CartridgeMetadata.LOCATIONS.CGB_FLAG),
+            CartridgeMetadataType.CGB_FLAG,
+        );
     }
 
     public get licenseeCode() {
@@ -362,6 +404,10 @@ class CartridgeMetadata {
         return new CartridgeMetadataValue(oldLicenseeCode, CartridgeMetadataType.OLD_LICENSEE_CODE);
     }
 
+    public get sgbFlag() {
+        return this.returnByteAtLocation(CartridgeMetadata.LOCATIONS.SGB_FLAG);
+    }
+
     public get ramSize() {
         return this.returnByteAtLocation(CartridgeMetadata.LOCATIONS.RAM_SIZE);
     }
@@ -379,11 +425,16 @@ class CartridgeMetadata {
     }
 
     public get globalHeaderChecksum() {
-        return this.cartridgeContent.readUInt16BE(CartridgeMetadata.LOCATIONS.GLOBAL_CHECKSUM[0]);
+        return this.cartridgeHeaderContent.readUInt16BE(
+            CartridgeMetadata.LOCATIONS.GLOBAL_CHECKSUM[0],
+        );
     }
 
     public get destinationCode() {
-        return this.returnByteAtLocation(CartridgeMetadata.LOCATIONS.DESTINATION_CODE);
+        return new CartridgeMetadataValue(
+            this.returnByteAtLocation(CartridgeMetadata.LOCATIONS.DESTINATION_CODE),
+            CartridgeMetadataType.DESTINATION_CODE,
+        );
     }
 
     public toString() {
